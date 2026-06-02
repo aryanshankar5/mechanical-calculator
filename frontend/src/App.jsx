@@ -1,3 +1,4 @@
+const API_URL = import.meta.env.VITE_API_URL;
 import { useState } from "react";
 import axios from "axios";
 
@@ -20,7 +21,7 @@ export default function App() {
       setLoading(true);
 
       const response = await axios.post(
-        "http://127.0.0.1:8000/calculate-bearing",
+        `${API_URL}/calculate-bearing`,
         form
       );
 
@@ -36,7 +37,7 @@ export default function App() {
   const downloadPdf = async () => {
     try {
       const response = await axios.post(
-        "http://127.0.0.1:8000/generate-pdf",
+        `${API_URL}/generate-pdf`,
         form,
         {
           responseType: "blob",
