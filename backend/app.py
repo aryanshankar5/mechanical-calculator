@@ -6,7 +6,8 @@ from pydantic import BaseModel
 import xlwings as xw
 import os
 
-from pdf_generator import generate_bearing_report
+from report_generator import generate_bearing_report
+from datetime import datetime
 
 
 # =====================================================
@@ -32,28 +33,50 @@ WORKBOOK_NAME = "Bearing Life Calculator.xlsx"
 SHEET_NAME = "Bearing Life Calculator"
 
 INPUT_CELLS = {
+    "bearing_type": "C6",
+    "number_of_rows": "C7",
+    "ball_diameter": "C8",
+
     "radial_load": "C11",
     "axial_load": "C12",
+
     "speed": "C15",
     "required_life": "C18"
 }
 
 OUTPUT_CELLS = {
+
+    "size_factor": "C9",
+
+    "load_rating": "C10",
+
+    "radial_factor": "C13",
+    "axial_factor": "C14",
+
     "equivalent_load": "C16",
+
+    "exponent": "C17",
+
     "life_million_rev": "C19",
+
     "required_dynamic_capacity": "C20",
+    "load_rating": "C10",
+
     "outer_diameter": "C25",
     "inner_diameter": "C26",
     "width": "C27",
     "number_of_balls": "C28"
 }
 
-
 # =====================================================
 # PYDANTIC MODEL
 # =====================================================
 
 class BearingInput(BaseModel):
+    bearing_type: str
+    number_of_rows: int
+    ball_diameter: float
+
     radial_load: float
     axial_load: float
     speed: float
@@ -87,21 +110,16 @@ def calculate_excel(data: BearingInput):
         # Write Inputs
         # -------------------------
 
-        sheet.range(
-            INPUT_CELLS["radial_load"]
-        ).value = data.radial_load
+        # Bearing details
+        sheet.range(INPUT_CELLS["bearing_type"]).value = data.bearing_type
+        sheet.range(INPUT_CELLS["number_of_rows"]).value = data.number_of_rows
+        sheet.range(INPUT_CELLS["ball_diameter"]).value = data.ball_diameter
 
-        sheet.range(
-            INPUT_CELLS["axial_load"]
-        ).value = data.axial_load
-
-        sheet.range(
-            INPUT_CELLS["speed"]
-        ).value = data.speed
-
-        sheet.range(
-            INPUT_CELLS["required_life"]
-        ).value = data.required_life
+        # Operating conditions
+        sheet.range(INPUT_CELLS["radial_load"]).value = data.radial_load
+        sheet.range(INPUT_CELLS["axial_load"]).value = data.axial_load
+        sheet.range(INPUT_CELLS["speed"]).value = data.speed
+        sheet.range(INPUT_CELLS["required_life"]).value = data.required_life
 
         # -------------------------
         # Recalculate Workbook
@@ -179,24 +197,24 @@ def generate_pdf(data: BearingInput):
 
     results = calculate_excel(data)
 
-    pdf_file = os.path.join(
-        os.getcwd(),
-        "reports",
-        "bearing_report.pdf"
-    )
+    report_data = {
 
-    generate_bearing_report(
-        {
-            "inputs": {
-                "radial_load": data.radial_load,
-                "axial_load": data.axial_load,
-                "speed": data.speed,
-                "required_life": data.required_life
-            },
-            "results": results
-        },
-        pdf_file
-    )
+        "report_title": "Bearing Design Report",
+        "report_date": datetime.now().strftime("%d-%m-%Y"),
+
+        "bearing_type": data.bearing_type,
+        "number_of_rows": data.number_of_rows,
+        "ball_diameter": data.ball_diameter,
+
+        "radial_load": data.radial_load,
+        "axial_load": data.axial_load,
+        "speed": data.speed,
+        "required_life": data.required_life,
+
+        **results
+    }
+
+    pdf_file = generate_bearing_report(report_data)
 
     return FileResponse(
         pdf_file,
