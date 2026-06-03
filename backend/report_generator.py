@@ -82,3 +82,33 @@ def generate_bearing_report(data):
     convert(output_docx, output_pdf)
 
     return output_pdf
+
+def generate_vibrating_screen_report(data):
+
+    template_path = os.path.join(
+        os.getcwd(),
+        "templates",
+        "Vibrating Screen Report.docx"
+    )
+
+    output_docx = os.path.join(
+        os.getcwd(),
+        "reports",
+        "vibrating_screen_report.docx"
+    )
+
+    output_pdf = os.path.join(
+        os.getcwd(),
+        "reports",
+        "vibrating_screen_report.pdf"
+    )
+
+    doc = Document(template_path)
+
+    replace_placeholders(doc, data)
+
+    doc.save(output_docx)
+
+    convert(output_docx, output_pdf)
+
+    return output_pdf

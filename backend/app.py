@@ -6,7 +6,11 @@ from pydantic import BaseModel
 import xlwings as xw
 import os
 
-from report_generator import generate_bearing_report
+from report_generator import (
+    generate_bearing_report,
+    generate_vibrating_screen_report
+)
+
 from datetime import datetime
 
 
@@ -82,6 +86,19 @@ class BearingInput(BaseModel):
     speed: float
     required_life: float
 
+class VibratingScreenInput(BaseModel):
+    feed_capacity: float
+    material: str
+    feed_size: float
+    aperture_size: float
+    inclination: float
+    moisture_condition: str
+    particle_shape: str
+    screen_type: str
+    number_of_decks: int
+    stroke: float
+    motor_speed: float
+    weight_oscillating_part: float
 
 # =====================================================
 # HELPER FUNCTION
@@ -221,3 +238,169 @@ def generate_pdf(data: BearingInput):
         media_type="application/pdf",
         filename="bearing_report.pdf"
     )
+
+VIBRATING_WORKBOOK_NAME = "Vibrating Screen Calculator.xlsx"
+VIBRATING_SHEET_NAME = "VSMA Screen Design"
+
+VIBRATING_INPUT_CELLS = {
+    "feed_capacity": "D6",
+    "material": "D7",
+    "feed_size": "D9",
+    "aperture_size": "D10",
+    "inclination": "D17",
+    "moisture_condition": "D18",
+    "particle_shape": "D19",
+    "screen_type": "D27",
+    "number_of_decks": "D28",
+    "stroke": "D30",
+    "motor_speed": "D31",
+    "weight_oscillating_part": "D32",
+}
+
+VIBRATING_OUTPUT_CELLS = {
+
+    # INPUT RELATED
+    "bulk_density": "D8",
+
+    # FACTORS
+    "specific_feed_rate": "D11",
+    "material_factor": "D12",
+    "oversize_factor": "D13",
+    "efficiency_factor": "D14",
+    "half_size_cut_factor": "D15",
+    "amplitude_factor": "D16",
+    "moisture_factor": "D20",
+    "shape_factor": "D21",
+    "inclination_factor": "D22",
+    "efficiency_requirement": "D23",
+    "open_area_factor": "D24",
+    "deck_factor": "D25",
+    "amplitude": "D26",
+    "motion_speed": "D29",
+
+    # SCREEN EFFICIENCY TERMS
+    "feed_size_a": "D33",
+    "undersize_product_b": "D34",
+    "oversize_product_c": "D35",
+
+    # OUTPUTS
+    "basic_capacity_factor": "D39",
+    "efficiency_factor_e": "D40",
+    "required_screen_area": "D41",
+    "width": "D42",
+    "length": "D43",
+    "speed": "D44",
+    "length_width_ratio": "D45",
+    "angular_velocity": "D46",
+    "radius": "D47",
+    "g_force": "D48",
+    "dynamic_load": "D49",
+    "transport_speed": "D50",
+    "bed_depth": "D51",
+    "force": "D52",
+    "power": "D53",
+    "screen_efficiency": "D54",
+}
+
+def get_vibrating_excel_path():
+    return os.path.join(
+        os.getcwd(),
+        "excel",
+        VIBRATING_WORKBOOK_NAME
+    )
+
+
+def calculate_vibrating_screen_excel(data: VibratingScreenInput):
+
+    excel_path = get_vibrating_excel_path()
+
+    app_excel = xw.App(visible=False)
+
+    try:
+        wb = app_excel.books.open(excel_path)
+
+        sheet = wb.sheets[VIBRATING_SHEET_NAME]
+
+        sheet.range(VIBRATING_INPUT_CELLS["feed_capacity"]).value = data.feed_capacity
+        sheet.range(VIBRATING_INPUT_CELLS["material"]).value = data.material
+        sheet.range(VIBRATING_INPUT_CELLS["feed_size"]).value = data.feed_size
+        sheet.range(VIBRATING_INPUT_CELLS["aperture_size"]).value = data.aperture_size
+        sheet.range(VIBRATING_INPUT_CELLS["inclination"]).value = data.inclination
+        sheet.range(VIBRATING_INPUT_CELLS["moisture_condition"]).value = data.moisture_condition
+        sheet.range(VIBRATING_INPUT_CELLS["particle_shape"]).value = data.particle_shape
+        sheet.range(VIBRATING_INPUT_CELLS["screen_type"]).value = data.screen_type
+        sheet.range(VIBRATING_INPUT_CELLS["number_of_decks"]).value = data.number_of_decks
+        sheet.range(VIBRATING_INPUT_CELLS["stroke"]).value = data.stroke
+        sheet.range(VIBRATING_INPUT_CELLS["motor_speed"]).value = data.motor_speed
+        sheet.range(VIBRATING_INPUT_CELLS["weight_oscillating_part"]).value = data.weight_oscillating_part
+
+        wb.app.calculate()
+
+        results = {}
+
+        for key, cell in VIBRATING_OUTPUT_CELLS.items():
+            results[key] = sheet.range(cell).value
+
+        wb.close()
+
+        return results
+
+    finally:
+        app_excel.quit()
+
+
+@app.post("/calculate-vibrating-screen")
+def calculate_vibrating_screen(data: VibratingScreenInput):
+
+    return calculate_vibrating_screen_excel(data)
+
+@app.post("/generate-vibrating-screen-pdf")
+def generate_vibrating_screen_pdf(data: VibratingScreenInput):
+
+    results = calculate_vibrating_screen_excel(data)
+
+    report_data = {
+        **data.dict(),
+        **results
+    }
+
+    pdf_path = generate_vibrating_screen_report(report_data)
+
+    return FileResponse(
+        pdf_path,
+        media_type="application/pdf",
+        filename="Vibrating_Screen_Report.pdf"
+    )
+
+@app.get("/vibrating-screen-materials")
+def get_vibrating_screen_materials():
+
+    excel_path = get_vibrating_excel_path()
+
+    app_excel = xw.App(visible=False)
+
+    try:
+        wb = app_excel.books.open(excel_path)
+
+        sheet = wb.sheets["Density - IS8730"]
+
+        materials = sheet.range("A2").expand("down").value
+
+        wb.close()
+
+        if not isinstance(materials, list):
+            materials = [materials]
+
+        materials = [
+            str(item)
+            for item in materials
+            if item is not None
+        ]
+
+        return {
+            "materials": materials
+        }
+
+    finally:
+        app_excel.quit()
+
