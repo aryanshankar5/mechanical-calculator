@@ -7,6 +7,9 @@ import {
 import Home from "./pages/Home";
 import BearingCalculator from "./pages/BearingCalculator";
 import VibratingScreenCalculator from "./pages/VibratingScreenCalculator";
+import VibratingFeederCalculator from "./pages/VibratingFeederCalculator";
+import ConveyorCalculator from "./pages/ConveyorCalculator";
+
 
 export default function App() {
 
@@ -30,6 +33,16 @@ export default function App() {
           element={<VibratingScreenCalculator />}
         />
 
+        <Route
+          path="/vibrating-feeder"
+          element={<VibratingFeederCalculator />}
+        />
+        
+        <Route
+          path="/conveyor"
+          element={<ConveyorCalculator />}
+        />
+        
       </Routes>
 
     </BrowserRouter>

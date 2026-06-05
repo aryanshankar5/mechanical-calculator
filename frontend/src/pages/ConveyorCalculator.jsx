@@ -15,70 +15,60 @@ import {
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-const moistureOptions = [
-  "Dry",
-  "Slightly damp",
-  "Wet",
-  "Sticky wet",
+const lumpSizeOptions = [
+  "Fine Grain to Dust",
+  "Granular",
+  "Sized",
+  "Unsized",
 ];
 
-const particleShapeOptions = [
-  "Rounded",
-  "Cubical",
-  "Angular",
-  "Flat/elongated",
+const abrasivenessOptions = [
+  "Non Abrasiveness",
+  "Mildly Abrasiveness",
+  "Abrasiveness",
+  "Very Abrasiveness",
 ];
 
-const screenTypeOptions = [
-  "Linear",
-  "Circular",
-  "Elliptical",
-];
-
-const deckOptions = [1, 2, 3];
-
-export default function VibratingScreenCalculator() {
+export default function ConveyorCalculator() {
   const navigate = useNavigate();
-
+  const [materials, setMaterials] = useState([]);
   const [form, setForm] = useState({
-    feed_capacity: 190,
-    material: "",
-    feed_size: 13,
-    aperture_size: 15,
-    inclination: 7,
-    moisture_condition: "Slightly damp",
-    particle_shape: "Rounded",
-    screen_type: "Linear",
-    number_of_decks: 3,
-    stroke: 8,
-    motor_speed: 950,
-    weight_oscillating_part: 202,
+    required_capacity: 200,
+    material_name: "",
+    lump_size_type: "Sized",
+    abrasiveness_type: "Non Abrasiveness",
+    belt_width_mm: 800,
+    trough_angle: 35,
+    surcharge_angle: 20,
+    conveyor_length: 100,
+    lift_elevation: 10,
+    working_time: 8,
+    pulley_diameter: 0.5,
   });
 
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [materials, setMaterials] = useState([]);
 
   useEffect(() => {
     axios
-      .get(`${API_URL}/vibrating-screen-materials`)
+      .get(`${API_URL}/conveyor-materials`)
       .then((response) => {
         const list = response.data.materials || [];
         setMaterials(list);
         if (list.length > 0) {
           setForm((prev) => ({
             ...prev,
-            material: list[0],
+            material_name: list[0],
           }));
         }
       })
       .catch((error) => {
-        console.error("Failed to load materials", error);
+        console.error("Failed to load conveyor materials", error);
       });
   }, []);
 
   const calculate = async () => {
-    if (!form.material) {
+    if (!form.material_name) {
       alert("Please select a material first");
       return;
     }
@@ -86,27 +76,27 @@ export default function VibratingScreenCalculator() {
     try {
       setLoading(true);
       const response = await axios.post(
-        `${API_URL}/calculate-vibrating-screen`,
+        `${API_URL}/calculate-conveyor`,
         form
       );
       setResult(response.data);
     } catch (error) {
       console.error(error);
-      alert("Vibrating screen calculation failed");
+      alert("Conveyor calculation failed");
     } finally {
       setLoading(false);
     }
   };
 
   const downloadPdf = async () => {
-    if (!form.material) {
+    if (!form.material_name) {
       alert("Please select a material first");
       return;
     }
 
     try {
       const response = await axios.post(
-        `${API_URL}/generate-vibrating-screen-pdf`,
+        `${API_URL}/generate-conveyor-pdf`,
         form,
         {
           responseType: "blob",
@@ -115,7 +105,7 @@ export default function VibratingScreenCalculator() {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
-      link.download = "Vibrating_Screen_Report.pdf";
+      link.download = "Conveyor_Report.pdf";
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -128,7 +118,7 @@ export default function VibratingScreenCalculator() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       <Header
-        title="Vibrating Screen Calculator"
+        title="Conveyor Calculator"
         onBackClick={() => navigate("/")}
         logo="/sail-logo.png"
       />
@@ -138,14 +128,14 @@ export default function VibratingScreenCalculator() {
           {/* FORM SECTION */}
           <div className="lg:col-span-2">
             <FormSection>
-              <Section title="Feed & Material Data">
+              <Section title="Material & Capacity Data">
                 <Input
-                  label="Feed Capacity"
-                  value={form.feed_capacity}
-                  onChange={(value) =>
-                    setForm({ ...form, feed_capacity: value })
-                  }
+                  label="Required Capacity"
+                  value={form.required_capacity}
                   unit="TPH"
+                  onChange={(value) =>
+                    setForm({ ...form, required_capacity: value })
+                  }
                   min={0}
                 />
 
@@ -155,11 +145,11 @@ export default function VibratingScreenCalculator() {
                   </label>
                   <select
                     className="w-full border-2 border-slate-200 rounded-xl p-3 text-base font-medium focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all duration-200 bg-white cursor-pointer"
-                    value={form.material}
+                    value={form.material_name}
                     onChange={(e) =>
                       setForm({
                         ...form,
-                        material: e.target.value,
+                        material_name: e.target.value,
                       })
                     }
                   >
@@ -172,112 +162,99 @@ export default function VibratingScreenCalculator() {
                   </select>
                 </div>
 
-                <Input
-                  label="Feed Size"
-                  value={form.feed_size}
+                <Select
+                  label="Lump Size Type"
+                  value={form.lump_size_type}
+                  options={lumpSizeOptions}
                   onChange={(value) =>
-                    setForm({ ...form, feed_size: value })
+                    setForm({ ...form, lump_size_type: value })
                   }
-                  unit="mm"
-                  min={0}
                 />
 
-                <Input
-                  label="Aperture Size"
-                  value={form.aperture_size}
+                <Select
+                  label="Abrasiveness Level"
+                  value={form.abrasiveness_type}
+                  options={abrasivenessOptions}
                   onChange={(value) =>
-                    setForm({ ...form, aperture_size: value })
+                    setForm({ ...form, abrasiveness_type: value })
                   }
-                  unit="mm"
-                  min={0}
                 />
               </Section>
 
-              <Section title="Operating Conditions">
+              <Section title="Belt & Geometry">
                 <Input
-                  label="Inclination"
-                  value={form.inclination}
+                  label="Belt Width"
+                  value={form.belt_width_mm}
+                  unit="mm"
                   onChange={(value) =>
-                    setForm({ ...form, inclination: value })
+                    setForm({ ...form, belt_width_mm: value })
                   }
+                  min={0}
+                />
+
+                <Input
+                  label="Trough Angle"
+                  value={form.trough_angle}
                   unit="°"
+                  onChange={(value) =>
+                    setForm({ ...form, trough_angle: value })
+                  }
                   min={0}
                   max={90}
                 />
 
-                <Select
-                  label="Moisture Condition"
-                  value={form.moisture_condition}
-                  options={moistureOptions}
+                <Input
+                  label="Surcharge Angle"
+                  value={form.surcharge_angle}
+                  unit="°"
                   onChange={(value) =>
-                    setForm({ ...form, moisture_condition: value })
+                    setForm({ ...form, surcharge_angle: value })
                   }
+                  min={0}
+                  max={90}
                 />
 
-                <Select
-                  label="Particle Shape"
-                  value={form.particle_shape}
-                  options={particleShapeOptions}
+                <Input
+                  label="Conveyor Length"
+                  value={form.conveyor_length}
+                  unit="m"
                   onChange={(value) =>
-                    setForm({ ...form, particle_shape: value })
+                    setForm({ ...form, conveyor_length: value })
                   }
+                  min={0}
+                />
+
+                <Input
+                  label="Lift / Elevation"
+                  value={form.lift_elevation}
+                  unit="m"
+                  onChange={(value) =>
+                    setForm({ ...form, lift_elevation: value })
+                  }
+                  min={0}
                 />
               </Section>
 
-              <Section title="Screen Configuration">
-                <Select
-                  label="Screen Type"
-                  value={form.screen_type}
-                  options={screenTypeOptions}
-                  onChange={(value) =>
-                    setForm({ ...form, screen_type: value })
-                  }
-                />
-
-                <Select
-                  label="Number of Decks"
-                  value={form.number_of_decks}
-                  options={deckOptions}
-                  onChange={(value) =>
-                    setForm({
-                      ...form,
-                      number_of_decks: Number(value),
-                    })
-                  }
-                />
-
+              <Section title="Drive System">
                 <Input
-                  label="Stroke"
-                  value={form.stroke}
+                  label="Working Time"
+                  value={form.working_time}
+                  unit="hr"
                   onChange={(value) =>
-                    setForm({ ...form, stroke: value })
+                    setForm({ ...form, working_time: value })
                   }
-                  unit="mm"
-                  min={0}
-                  step={0.1}
-                />
-
-                <Input
-                  label="Motor Speed"
-                  value={form.motor_speed}
-                  onChange={(value) =>
-                    setForm({ ...form, motor_speed: value })
-                  }
-                  unit="RPM"
                   min={0}
                 />
 
                 <Input
-                  label="Weight of Oscillating Part"
-                  value={form.weight_oscillating_part}
+                  label="Pulley Diameter"
+                  value={form.pulley_diameter}
+                  unit="m"
                   onChange={(value) =>
-                    setForm({
-                      ...form,
-                      weight_oscillating_part: value,
-                    })
+                    setForm({ ...form, pulley_diameter: value })
                   }
-                  unit="kg"
                   min={0}
+                  step={0.01}
                 />
               </Section>
 
@@ -287,7 +264,7 @@ export default function VibratingScreenCalculator() {
                   disabled={loading}
                   variant="primary"
                 >
-                  {loading ? "Calculating..." : "Calculate Screen"}
+                  {loading ? "Calculating..." : "Calculate Conveyor"}
                 </Button>
 
                 <Button
@@ -307,33 +284,39 @@ export default function VibratingScreenCalculator() {
               {result && (
                 <>
                   <ResultCard
-                    title="Screen Area"
-                    value={result.required_screen_area}
-                    unit="m²"
+                    title="Mass of Material"
+                    value={result.mass_handled_material}
+                    unit="kg/m"
                   />
-
                   <ResultCard
-                    title="Width"
-                    value={result.width}
-                    unit="m"
+                    title="Effective Tension"
+                    value={result.effective_tension}
+                    unit="N"
                   />
-
                   <ResultCard
-                    title="Length"
-                    value={result.length}
-                    unit="m"
-                  />
-
-                  <ResultCard
-                    title="Power Required"
-                    value={result.power}
+                    title="Motor Power"
+                    value={result.motor_power}
                     unit="kW"
                   />
-
                   <ResultCard
-                    title="Screen Efficiency"
-                    value={result.screen_efficiency}
-                    unit="%"
+                    title="Gearbox Power"
+                    value={result.gearbox_power}
+                    unit="kW"
+                  />
+                  <ResultCard
+                    title="High Speed Coupling"
+                    value={result.high_speed_coupling}
+                    unit="N-m"
+                  />
+                  <ResultCard
+                    title="Low Speed Coupling"
+                    value={result.low_speed_coupling}
+                    unit="N-m"
+                  />
+                  <ResultCard
+                    title="Pulley Shaft Diameter"
+                    value={result.pulley_shaft_diameter}
+                    unit="mm"
                   />
                 </>
               )}

@@ -112,3 +112,64 @@ def generate_vibrating_screen_report(data):
     convert(output_docx, output_pdf)
 
     return output_pdf
+
+def generate_vibrating_feeder_report(data):
+
+    template_path = os.path.join(
+        os.getcwd(),
+        "templates",
+        "Vibrating Feeder Report.docx"
+    )
+
+    output_docx = os.path.join(
+        os.getcwd(),
+        "reports",
+        "vibrating_feeder_report.docx"
+    )
+
+    output_pdf = os.path.join(
+        os.getcwd(),
+        "reports",
+        "vibrating_feeder_report.pdf"
+    )
+
+    doc = Document(template_path)
+
+    replace_placeholders(doc, data)
+
+    doc.save(output_docx)
+
+    convert(output_docx, output_pdf)
+
+    return output_pdf
+
+def generate_conveyor_report(data):
+
+    template_path = os.path.join(
+        os.getcwd(),
+        "templates",
+        "Conveyor Calculation Report.docx"
+    )
+
+    output_docx = os.path.join(
+        os.getcwd(),
+        "reports",
+        "conveyor_report.docx"
+    )
+
+    output_pdf = os.path.join(
+        os.getcwd(),
+        "reports",
+        "conveyor_report.pdf"
+    )
+
+    doc = Document(template_path)
+
+    replace_placeholders(doc, data)
+
+    doc.save(output_docx)
+
+    convert(output_docx, output_pdf)
+
+    return output_pdf
+
