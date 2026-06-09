@@ -1,7 +1,11 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from urllib.parse import unquote
+from typing import Optional
+
+import threading
 
 import xlwings as xw
 import os
@@ -29,7 +33,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
+excel_lock = threading.Lock()
 
 # =====================================================
 # EXCEL CONFIGURATION
@@ -563,119 +567,79 @@ def generate_vibrating_feeder_pdf(data: VibratingFeederInput):
     )
 
 class ConveyorInput(BaseModel):
-    required_capacity: float
+    rated_capacity: float
     material_name: str
-    lump_size_type: str
-    abrasiveness_type: str
-    belt_width_mm: float
-    trough_angle: float
-    surcharge_angle: float
+    bulk_density: float
+    margin: float
+    belt_speed: float
     conveyor_length: float
-    lift_elevation: float
-    working_time: float
-    pulley_diameter: float
+    lift: float
+    total_skirt_length: float
+    belt_width: float
+    idler_diameter: float
+    belt_type: str
+    carcass_thickness: float
+    drive_pulley_diameter: float
+    snub_pulley_diameter: float
+    tail_pulley_diameter: float
 
-CONVEYOR_WORKBOOK_NAME = "Conveyor Calculation.xlsx"
+
+
+CONVEYOR_WORKBOOK_NAME = "Conveyor Calculation Official.xlsx"
+CONVEYOR_MATERIAL_WORKBOOK_NAME = "Conveyor Calculation.xlsx"
 CONVEYOR_SHEET_NAME = "Belt Conveyor Motor Power Calcu"
 
 CONVEYOR_INPUT_CELLS = {
-    "required_capacity": "D5",
-    "material_name": "D6",
-    "lump_size_type": "D8",
-    "abrasiveness_type": "D9",
-    "belt_width_mm": "D13",
-    "trough_angle": "D14",
-    "surcharge_angle": "D15",
-    "conveyor_length": "D18",
-    "lift_elevation": "D19",
-    "working_time": "D22",
-    "pulley_diameter": "D33",
+    "rated_capacity": ("INPUT SHEET", "C5"),
+
+    "margin": ("POWER", "B5"),
+    "bulk_density": ("POWER", "B9"),
+    "belt_width": ("POWER", "B12"),
+
+    "belt_type": ("POWER", "K20"),
+    "carcass_thickness": ("POWER", "B56"),
+
+    "belt_speed": ("INPUT SHEET", "F5"),
+    "conveyor_length": ("INPUT SHEET", "E5"),
+    "lift": ("INPUT SHEET", "D5"),
+    "total_skirt_length": ("INPUT SHEET", "G5"),
+
+    "idler_diameter": ("POWER", "B39"),
+
+    "drive_pulley_diameter": ("POWER", "B167"),
+    "snub_pulley_diameter": ("POWER", "B168"),
+    "tail_pulley_diameter": ("POWER", "B169"),
 }
 
 CONVEYOR_OUTPUT_CELLS = {
-    "bulk_density": "D7",
+    "design_capacity": ("POWER", "B6"),
 
-    "speed_factor": "D10",
-    "belt_speed": "D11",
+    "mass_handled_material": ("POWER", "B61"),
+    "effective_tension": ("POWER", "B156"),
 
-    "initial_velocity": "D12",
+    "motor_power": ("POWER", "B140"),
+    "gearbox_kw": ("POWER", "B173"),
+    "gearbox_reduction_ratio": ("POWER", "B176"),
 
-    "belt_width_m": "D16",
-    "cross_sectional_area": "D17",
-    "slope_angle": "D20",
-    "slope_factor": "D21",
-    "service_factor": "D23",
+    "high_speed_coupling": ("POWER", "B182"),
+    "low_speed_coupling": ("POWER", "B187"),
 
-    "artificial_friction_coefficient": "D24",
-    "mass_carrying_idlers": "D25",
-    "mass_return_idlers": "D26",
-    "mass_belt": "D27",
-    "friction_material_belt": "D28",
-    "friction_material_skirt": "D29",
-    "skirt_width": "D30",
-    "skirt_length": "D31",
-    "belt_thickness": "D32",
-    "shaft_diameter_at_bearing": "D34",
-    "vector_sum_tensions": "D35",
-    "average_belt_tension": "D36",
-    "trough_factor": "D37",
-    "friction_idler_belt": "D38",
-    "length_tilted_idlers": "D39",
-    "idler_tilt_angle": "D40",
-    "cleaner_pressure": "D41",
-    "friction_belt_cleaner": "D42",
-    "scraping_factor": "D43",
-    "drive_efficiency": "D44",
-    "gravity": "D45",
-    "drive_coefficient": "D46",
-    "wrap_angle": "D47",
-    "external_cleaner_count": "D48",
-    "internal_cleaner_count": "D49",
-    "external_cleaner_thickness": "D50",
-    "internal_cleaner_thickness": "D51",
-    "external_cleaner_pressure": "D52",
-    "internal_cleaner_pressure": "D53",
+    "braking_torque": ("POWER", "B191"),
+    "pulley_shaft_diameter": ("POWER", "B208"),
 
-    "pulley_face_width": "D54",
-    "allowable_shear_stress": "D55",
-    "motor_speed": "D56",
-    "selected_motor_rating": "D57",
-
-    "conveyor_capacity": "D64",
-    "volumetric_capacity": "D65",
-    "mass_handled_material": "D66",
-    "main_resistance": "D67",
-    "slope_resistance": "D68",
-    "accel_length": "D69",
-    "accel_resistance_inertial": "D70",
-    "skirt_accel_resistance": "D71",
-    "wrap_resistance": "D72",
-    "bearing_resistance": "D73",
-    "secondary_resistance": "D74",
-    "idler_tilt_resistance": "D75",
-    "skirt_resistance_main": "D76",
-    "belt_cleaner_resistance": "D77",
-    "discharge_plough_resistance": "D78",
-    "special_resistance": "D79",
-
-    "drive_pulley_rpm": "D87",
-    "drive_wrap_resistance": "D80",
-    "drive_bearing_resistance": "D81",
-    "effective_tension": "D82",
-    "power_at_drive_pulley": "D83",
-    "absorbed_power": "D84",
-    "motor_power": "D85",
-    "gearbox_power": "D86",
-    "tight_side_tension": "D49",
-    "slack_side_tension": "D50",
-    "high_speed_coupling": "D88",
-    "low_speed_coupling": "D89",
-
-    "resultant_pulley_load": "D99",
-    "maximum_bending_moment": "D100",
-    "equivalent_torque": "D101",
-    "pulley_shaft_diameter": "D103",
+    "carcass_thickness": ("POWER", "B56"),
+    "drive_pulley_diameter": ("POWER", "B167"),
+    "snub_pulley_diameter": ("POWER", "B168"),
+    "tail_pulley_diameter": ("POWER", "B169"),
 }
+
+def get_conveyor_material_excel_path():
+    return os.path.join(
+        os.getcwd(),
+        "excel",
+        CONVEYOR_MATERIAL_WORKBOOK_NAME
+    )
+
 
 def get_conveyor_excel_path():
     return os.path.join(
@@ -686,32 +650,224 @@ def get_conveyor_excel_path():
 
 
 def calculate_conveyor_excel(data: ConveyorInput):
-
+  with excel_lock:
     excel_path = get_conveyor_excel_path()
-    
+
     app_excel = xw.App(visible=False)
 
     try:
         wb = app_excel.books.open(excel_path)
-        sheet = wb.sheets[CONVEYOR_SHEET_NAME]
 
-        for key, cell in CONVEYOR_INPUT_CELLS.items():
-            sheet.range(cell).value = getattr(data, key)
+        for key, item in CONVEYOR_INPUT_CELLS.items():
+            sheet_name, cell = item
+            wb.sheets[sheet_name].range(cell).value = getattr(data, key)
 
         wb.app.calculate()
 
-
         results = {}
 
-        for key, cell in CONVEYOR_OUTPUT_CELLS.items():
-            results[key] = sheet.range(cell).value
+        for key, item in CONVEYOR_OUTPUT_CELLS.items():
+            sheet_name, cell = item
+            results[key] = wb.sheets[sheet_name].range(cell).value
 
         wb.close()
-
         return results
 
     finally:
         app_excel.quit()
+
+@app.post("/conveyor-design-capacity")
+def conveyor_design_capacity(data: dict = Body(...)):
+
+    with excel_lock:
+        excel_path = get_conveyor_excel_path()
+
+        app_excel = None
+        wb = None
+
+        try:
+            app_excel = xw.App(visible=False)
+            wb = app_excel.books.open(excel_path)
+
+            power = wb.sheets["POWER"]
+            input_sheet = wb.sheets["INPUT SHEET"]
+
+            rated_capacity = data.get("rated_capacity")
+            margin = data.get("margin")
+
+            if rated_capacity not in [None, ""]:
+                input_sheet.range("C5").value = rated_capacity
+
+            if margin not in [None, ""]:
+                power.range("B5").value = margin
+
+            wb.app.calculate()
+
+            result = {
+                "design_capacity": power.range("B6").value
+            }
+
+            wb.close()
+            wb = None
+
+            return result
+
+        except Exception as e:
+            print("DESIGN CAPACITY ERROR:", str(e))
+            return {
+                "design_capacity": "",
+                "error": str(e)
+            }
+
+        finally:
+            if wb is not None:
+                try:
+                    wb.close()
+                except:
+                    pass
+
+            if app_excel is not None:
+                try:
+                    app_excel.quit()
+                except:
+                    pass
+
+@app.post("/conveyor-belt-type-values")
+def conveyor_belt_type_values(data: dict = Body(...)):
+  with excel_lock:
+    excel_path = get_conveyor_excel_path()
+
+    app_excel = xw.App(visible=False)
+    wb = None
+
+    try:
+        wb = app_excel.books.open(excel_path)
+
+        power = wb.sheets["POWER"]
+
+        belt_type = data.get("belt_type")
+
+        if belt_type not in [None, ""]:
+            power.range("K20").value = belt_type
+
+        wb.app.calculate()
+
+        result = {
+            "carcass_thickness": power.range("B56").value
+        }
+
+        wb.close()
+        wb = None
+        return result
+
+    finally:
+        if wb is not None:
+            try:
+                wb.close()
+            except:
+                pass
+
+        try:
+            app_excel.quit()
+        except:
+            pass
+
+@app.post("/conveyor-pulley-values")
+def conveyor_pulley_values(data: dict = Body(...)):
+  with excel_lock:
+    excel_path = get_conveyor_excel_path()
+
+    app_excel = xw.App(visible=False)
+    wb = None
+
+    try:
+        wb = app_excel.books.open(excel_path)
+
+        power = wb.sheets["POWER"]
+
+        carcass_thickness = data.get("carcass_thickness")
+
+        if carcass_thickness not in [None, ""]:
+            power.range("B56").value = carcass_thickness
+
+        wb.app.calculate()
+
+        result = {
+            "drive_pulley_diameter": power.range("B167").value,
+            "snub_pulley_diameter": power.range("B168").value,
+            "tail_pulley_diameter": power.range("B169").value,
+        }
+
+        wb.close()
+        wb = None
+        return result
+
+    finally:
+        if wb is not None:
+            try:
+                wb.close()
+            except:
+                pass
+
+        try:
+            app_excel.quit()
+        except:
+            pass
+
+
+@app.post("/conveyor-live-values")
+def conveyor_live_values(data: dict = Body(...)):
+
+    excel_path = get_conveyor_excel_path()
+
+    app_excel = xw.App(visible=False)
+    wb = None
+
+    try:
+        wb = app_excel.books.open(excel_path)
+
+        for key, item in CONVEYOR_INPUT_CELLS.items():
+
+            # Skip if frontend has not sent this key
+            if key not in data:
+                continue
+
+            value = data.get(key)
+
+            # Skip empty values
+            if value in [None, ""]:
+                continue
+
+            sheet_name, cell = item
+            wb.sheets[sheet_name].range(cell).value = value
+
+        wb.app.calculate()
+
+        power = wb.sheets["POWER"]
+
+        result = {
+            "design_capacity": power.range("B6").value,
+            "carcass_thickness": power.range("B56").value,
+            "drive_pulley_diameter": power.range("B167").value,
+            "snub_pulley_diameter": power.range("B168").value,
+            "tail_pulley_diameter": power.range("B169").value,
+        }
+
+        wb.close()
+        return result
+
+    finally:
+        if wb is not None:
+            try:
+                wb.close()
+            except:
+                pass
+
+        try:
+            app_excel.quit()
+        except:
+            pass
+
 
 @app.post("/calculate-conveyor")
 def calculate_conveyor(data: ConveyorInput):
@@ -721,8 +877,8 @@ def calculate_conveyor(data: ConveyorInput):
 
 @app.get("/conveyor-materials")
 def get_conveyor_materials():
-
-    excel_path = get_conveyor_excel_path()
+  with excel_lock:
+    excel_path = get_conveyor_material_excel_path()
 
     app_excel = xw.App(visible=False)
 
@@ -735,8 +891,11 @@ def get_conveyor_materials():
 
         wb.close()
 
+        if not isinstance(materials, list):
+            materials = [materials]
+
         materials = [
-            str(item)
+            str(item).strip()
             for item in materials
             if item is not None
         ]
@@ -745,6 +904,38 @@ def get_conveyor_materials():
 
         return {
             "materials": materials
+        }
+
+    finally:
+        app_excel.quit()
+
+@app.get("/conveyor-material-density/{material_name}")
+def get_conveyor_material_density(material_name: str):
+  with excel_lock:
+    excel_path = get_conveyor_material_excel_path()
+
+    app_excel = xw.App(visible=False)
+
+    try:
+        wb = app_excel.books.open(excel_path)
+
+        sheet = wb.sheets["Density - IS8730"]
+
+        data = sheet.range("A2:B500").value
+
+        wb.close()
+
+        for row in data:
+            if row and row[0]:
+                if str(row[0]).strip().lower() == material_name.strip().lower():
+                    return {
+                        "material": row[0],
+                        "bulk_density": row[1]
+                    }
+
+        return {
+            "material": material_name,
+            "bulk_density": ""
         }
 
     finally:
