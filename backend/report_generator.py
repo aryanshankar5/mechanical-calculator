@@ -1,6 +1,8 @@
 from docx import Document
 from docx2pdf import convert
 import os
+import subprocess
+from datetime import datetime
 
 
 def replace_placeholders(doc, replacements):
@@ -143,33 +145,105 @@ def generate_vibrating_feeder_report(data):
 
     return output_pdf
 
-def generate_conveyor_report(data):
+
+def format_value(value):
+    if value is None:
+        return "-"
+
+    if isinstance(value, float):
+        return f"{value:.3f}".rstrip("0").rstrip(".")
+
+    return str(value)
+
+
+def replace_placeholders_in_paragraph(paragraph, data):
+    full_text = "".join(run.text for run in paragraph.runs)
+
+    if "{" not in full_text:
+        return
+
+    new_text = full_text
+
+    for key, value in data.items():
+        placeholder = "{" + key + "}"
+        new_text = new_text.replace(placeholder, format_value(value))
+
+    if new_text != full_text:
+        for run in paragraph.runs:
+            run.text = ""
+
+        if paragraph.runs:
+            paragraph.runs[0].text = new_text
+        else:
+            paragraph.add_run(new_text)
+
+
+def replace_placeholders_in_table(table, data):
+    for row in table.rows:
+        for cell in row.cells:
+            for paragraph in cell.paragraphs:
+                replace_placeholders_in_paragraph(paragraph, data)
+
+
+def replace_all_placeholders(doc, data):
+    for paragraph in doc.paragraphs:
+        replace_placeholders_in_paragraph(paragraph, data)
+
+    for table in doc.tables:
+        replace_placeholders_in_table(table, data)
+
+    for section in doc.sections:
+        for paragraph in section.header.paragraphs:
+            replace_placeholders_in_paragraph(paragraph, data)
+
+        for table in section.header.tables:
+            replace_placeholders_in_table(table, data)
+
+        for paragraph in section.footer.paragraphs:
+            replace_placeholders_in_paragraph(paragraph, data)
+
+        for table in section.footer.tables:
+            replace_placeholders_in_table(table, data)
+
+
+
+
+
+def generate_conveyor_report(report_data):
+    base_dir = os.path.dirname(os.path.abspath(__file__))
 
     template_path = os.path.join(
-        os.getcwd(),
+        base_dir,
         "templates",
-        "Conveyor Calculation Report.docx"
+        "Conveyor final Report.docx"
     )
 
+    output_dir = os.path.join(base_dir, "reports")
+    os.makedirs(output_dir, exist_ok=True)
+
     output_docx = os.path.join(
-        os.getcwd(),
-        "reports",
-        "conveyor_report.docx"
+        output_dir,
+        "Conveyor_Report_Filled.docx"
     )
 
     output_pdf = os.path.join(
-        os.getcwd(),
-        "reports",
-        "conveyor_report.pdf"
+        output_dir,
+        "Conveyor_Report.pdf"
     )
+
+    if not os.path.exists(template_path):
+        raise FileNotFoundError(f"Template not found: {template_path}")
 
     doc = Document(template_path)
 
-    replace_placeholders(doc, data)
+    replace_all_placeholders(doc, report_data)
 
     doc.save(output_docx)
 
+    # Convert DOCX to PDF using docx2pdf
     convert(output_docx, output_pdf)
 
-    return output_pdf
+    if not os.path.exists(output_pdf):
+        raise FileNotFoundError(f"PDF was not generated: {output_pdf}")
 
+    return output_pdf

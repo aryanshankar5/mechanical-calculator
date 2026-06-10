@@ -77,24 +77,31 @@ export function Input({ label, value, onChange, unit, placeholder, min, max, ste
 /**
  * Select Component - Reusable dropdown selector
  */
-export function Select({ label, value, options, onChange, placeholder = 'Select an option' }) {
+export function Select({ label, value, options, onChange, placeholder = 'Select an option', unit }) {
   return (
     <div className="space-y-2">
       <label className="block text-sm font-semibold text-slate-700 uppercase tracking-wide">
         {label}
       </label>
-      <select
-        className="w-full border-2 border-slate-200 rounded-xl p-3 text-base font-medium focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all duration-200 bg-white cursor-pointer"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        <option value="">{placeholder}</option>
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
+      <div className="flex gap-3">
+        <select
+          className="flex-1 border-2 border-slate-200 rounded-xl p-3 text-base font-medium focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all duration-200 bg-white cursor-pointer"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        >
+          <option value="">{placeholder}</option>
+          {options.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+        {unit && (
+          <div className="px-4 py-3 bg-gradient-to-br from-blue-50 to-slate-50 border-2 border-slate-200 rounded-xl flex items-center justify-center font-semibold text-slate-700 whitespace-nowrap min-w-fit">
+            {unit}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

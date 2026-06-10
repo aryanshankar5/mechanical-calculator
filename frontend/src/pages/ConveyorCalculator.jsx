@@ -27,14 +27,17 @@ function SmallSpinner({ text = "Loading..." }) {
 export default function ConveyorCalculator() {
   const navigate = useNavigate();
   const [materials, setMaterials] = useState([]);
+  const [materialSearch, setMaterialSearch] = useState("");
+  const [showMaterialDropdown, setShowMaterialDropdown] = useState(false);
   const [form, setForm] = useState({
     rated_capacity: 200,
     material_name: "",
     bulk_density: "",
     margin: 1.1,
     design_capacity: "",
-
-    belt_speed: 2.5,
+    lump_size: "",
+    abrasiveness: "",
+    belt_speed: "",
     conveyor_length: 100,
     lift: 10,
     total_skirt_length: 5,
@@ -56,6 +59,7 @@ export default function ConveyorCalculator() {
     bulkDensity: false,
     carcassThickness: false,
     pulleyDiameters: false,
+    beltSpeed: false,
   });
 
   const designCapacityTimer = useRef(null);
@@ -69,8 +73,38 @@ export default function ConveyorCalculator() {
     1200: [114.3, 127, 139.7, 152.4],
     1400: [139.7, 152.4],
   };
+
   const idlerDiameterOptions = idlerDiameterMap[Number(form.belt_width)] || [];
 
+  const filteredMaterials = materials
+    .filter((material) =>
+      material.toLowerCase().includes(materialSearch.toLowerCase())
+    )
+    .sort((a, b) => {
+      const search = materialSearch.toLowerCase();
+
+      const aStarts = a.toLowerCase().startsWith(search);
+      const bStarts = b.toLowerCase().startsWith(search);
+
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+
+      return a.localeCompare(b);
+    });
+
+  const lumpSizeOptions = [
+    "Fine Grain to Dust",
+    "Granular",
+    "Sized",
+    "Unsized",
+  ];
+
+  const abrasivenessOptions = [
+    "Non Abrasiveness",
+    "Mildly Abrasiveness",
+    "Abrasiveness",
+    "Very Abrasiveness",
+  ];
 
   useEffect(() => {
     axios
@@ -83,7 +117,7 @@ export default function ConveyorCalculator() {
           const firstMaterial = list[0];
 
           const densityResponse = await axios.get(
-            `${API_URL}/conveyor-material-density/${firstMaterial}`
+            `${API_URL}/conveyor-material-density/${encodeURIComponent(firstMaterial)}`
           );
 
           setForm((prev) => ({
@@ -91,6 +125,8 @@ export default function ConveyorCalculator() {
             material_name: firstMaterial,
             bulk_density: densityResponse.data.bulk_density,
           }));
+
+          setMaterialSearch(firstMaterial);
         }
       })
       .catch((error) => {
@@ -204,7 +240,36 @@ export default function ConveyorCalculator() {
         }
       };
 
+        const fetchBeltSpeedFromOldExcel = async (lumpSize, abrasiveness) => {
+          if (!lumpSize || !abrasiveness) return;
 
+          try {
+            setLoadingFields((prev) => ({
+              ...prev,
+              beltSpeed: true,
+            }));
+
+            const response = await axios.post(
+              `${API_URL}/conveyor-belt-speed-from-old-excel`,
+              {
+                lump_size: lumpSize,
+                abrasiveness: abrasiveness,
+              }
+            );
+
+            setForm((prev) => ({
+              ...prev,
+              belt_speed: response.data.belt_speed,
+            }));
+          } catch (error) {
+            console.error("Belt speed fetch failed", error.response?.data || error);
+          } finally {
+            setLoadingFields((prev) => ({
+              ...prev,
+              beltSpeed: false,
+            }));
+          }
+        };
 
     const calculate = async () => {
       if (!form.material_name) {
@@ -280,7 +345,8 @@ export default function ConveyorCalculator() {
                 <Input
                   label="Rated Capacity"
                   value={form.rated_capacity}
-                  unit="TPH"
+                  unit="tph"
+                  step="1"
                   onChange={(value) => {
                     const numericValue = Number(value);
 
@@ -303,6 +369,7 @@ export default function ConveyorCalculator() {
                   label="Margin"
                   value={form.margin}
                   unit="%"
+                  step="0.1"
                   onChange={(value) => {
                     const numericValue = Number(value);
 
@@ -324,7 +391,8 @@ export default function ConveyorCalculator() {
                 <Input
                   label="Design Capacity"
                   value={form.design_capacity}
-                  unit="TPH"
+                  unit="tph"
+                  step="1"
                   onChange={() => {}}
                 />
 
@@ -334,55 +402,91 @@ export default function ConveyorCalculator() {
 
             
 
-                <div className="space-y-2">
+                <div className="space-y-2 relative">
                   <label className="block text-sm font-semibold text-slate-700 uppercase tracking-wide">
                     Material
                   </label>
 
-                  <select
-                    className="w-full border-2 border-slate-200 rounded-xl p-3 text-base font-medium focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all duration-200 bg-white cursor-pointer"
-                    value={form.material_name}
-                      onChange={async (e) => {
-                        const selectedMaterial = e.target.value;
+                  <input
+                    type="text"
+                    value={materialSearch}
+                    placeholder="Search material..."
+                    onFocus={() => setShowMaterialDropdown(true)}
+                    onChange={(e) => {
+                      setMaterialSearch(e.target.value);
+                      setShowMaterialDropdown(true);
 
-                        try {
-                          setLoadingFields((prev) => ({
-                            ...prev,
-                            bulkDensity: true,
-                          }));
+                      setForm((prev) => ({
+                        ...prev,
+                        material_name: "",
+                        bulk_density: "",
+                      }));
+                    }}
+                    className="w-full border-2 border-slate-200 rounded-xl p-3 text-base font-medium focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all duration-200 bg-white"
+                  />
 
-                          const densityResponse = await axios.get(
-                            `${API_URL}/conveyor-material-density/${selectedMaterial}`
-                          );
+                  {showMaterialDropdown && (
+                    <div className="absolute z-50 w-full max-h-60 overflow-y-auto bg-white border-2 border-slate-200 rounded-xl shadow-lg">
+                      {filteredMaterials.length > 0 ? (
+                        filteredMaterials.map((material, index) => (
+                          <div
+                            key={`${material}-${index}`}
+                            onMouseDown={async () => {
+                              try {
+                                setLoadingFields((prev) => ({
+                                  ...prev,
+                                  bulkDensity: true,
+                                }));
 
-                          setForm((prev) => ({
-                            ...prev,
-                            material_name: selectedMaterial,
-                            bulk_density: Number(densityResponse.data.bulk_density),
-                          }));
-                        } catch (error) {
-                          console.error("Bulk density fetch failed", error.response?.data || error);
-                        } finally {
-                          setLoadingFields((prev) => ({
-                            ...prev,
-                            bulkDensity: false,
-                          }));
-                        }
-                      }}
-                  >
-                    <option value="">Select Material</option>
-                    {materials.map((material, index) => (
-                      <option key={`${material}-${index}`} value={material}>
-                        {material}
-                      </option>
-                    ))}
-                  </select>
+                                setMaterialSearch(material);
+                                setShowMaterialDropdown(false);
+
+                                const densityResponse = await axios.get(
+                                  `${API_URL}/conveyor-material-density/${encodeURIComponent(material)}`
+                                );
+
+                                setForm((prev) => ({
+                                  ...prev,
+                                  material_name: material,
+                                  bulk_density: Number(densityResponse.data.bulk_density),
+                                }));
+                              } catch (error) {
+                                console.error(
+                                  "Bulk density fetch failed",
+                                  error.response?.data || error
+                                );
+                              } finally {
+                                setLoadingFields((prev) => ({
+                                  ...prev,
+                                  bulkDensity: false,
+                                }));
+                              }
+                            }}
+                            className="px-4 py-2 text-sm font-medium cursor-pointer hover:bg-blue-100"
+                          >
+                            {material}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="px-4 py-2 text-sm text-slate-500">
+                          No material found
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* {form.material_name && (
+                    <p className="text-xs text-slate-500">
+                      Selected: {form.material_name}
+                    </p>
+                  )} */}
                 </div>
 
                 <Input
                   label="Bulk Density"
                   value={form.bulk_density}
                   unit="t/m³"
+                  step="0.1"
                   onChange={(value) =>
                     setForm({
                       ...form,
@@ -400,6 +504,7 @@ export default function ConveyorCalculator() {
                   label="Belt Width"
                   value={form.belt_width}
                   options={beltWidthOptions}
+                  unit="mm"
                   onChange={(value) => {
                     const selectedBeltWidth = Number(value);
                     const availableIdlers = idlerDiameterMap[selectedBeltWidth] || [];
@@ -416,6 +521,7 @@ export default function ConveyorCalculator() {
                         label="Idler Diameter"
                         value={form.idler_diameter}
                         options={idlerDiameterOptions}
+                        unit="mm"
                         onChange={(value) => {
                           setForm({
                             ...form,
@@ -442,6 +548,7 @@ export default function ConveyorCalculator() {
                     label="Carcass Thickness"
                     value={form.carcass_thickness}
                     unit="mm"
+                    step="0.1"
                     onChange={(value) => {
                       const numericValue = Number(value);
 
@@ -462,6 +569,7 @@ export default function ConveyorCalculator() {
                     label="Drive Pulley Diameter"
                     value={form.drive_pulley_diameter}
                     unit="mm"
+                    step="1"
                     onChange={(value) =>
                       setForm({
                         ...form,
@@ -474,6 +582,7 @@ export default function ConveyorCalculator() {
                     label="Snub Pulley Diameter"
                     value={form.snub_pulley_diameter}
                     unit="mm"
+                    step="1"
                     onChange={(value) =>
                       setForm({
                         ...form,
@@ -486,6 +595,7 @@ export default function ConveyorCalculator() {
                     label="Tail Pulley Diameter"
                     value={form.tail_pulley_diameter}
                     unit="mm"
+                    step="1"
                     onChange={(value) =>
                       setForm({
                         ...form,
@@ -499,12 +609,50 @@ export default function ConveyorCalculator() {
                   )}
 
 
-                <Input
-                  label="Belt Speed"
-                  value={form.belt_speed}
-                  unit="m/s"
-                  onChange={(value) => setForm({ ...form, belt_speed: value })}
-                />
+                  <Select
+                    label="Lump Size"
+                    value={form.lump_size}
+                    options={lumpSizeOptions}
+                    onChange={(value) => {
+                      setForm((prev) => ({
+                        ...prev,
+                        lump_size: value,
+                      }));
+
+                      fetchBeltSpeedFromOldExcel(value, form.abrasiveness);
+                    }}
+                  />
+
+                  <Select
+                    label="Abrasiveness"
+                    value={form.abrasiveness}
+                    options={abrasivenessOptions}
+                    onChange={(value) => {
+                      setForm((prev) => ({
+                        ...prev,
+                        abrasiveness: value,
+                      }));
+
+                      fetchBeltSpeedFromOldExcel(form.lump_size, value);
+                    }}
+                  />
+
+                  <Input
+                    label="Belt Speed"
+                    value={form.belt_speed}
+                    unit="m/s"
+                    step="0.1"
+                    onChange={(value) =>
+                      setForm({
+                        ...form,
+                        belt_speed: Number(value),
+                      })
+                    }
+                  />
+
+                  {loadingFields.beltSpeed && (
+                    <SmallSpinner text="Fetching belt speed..." />
+                  )}
 
                 <Input
                   label="Conveyor Length"
@@ -574,9 +722,9 @@ export default function ConveyorCalculator() {
                     unit="kW"
                   />
                   <ResultCard
-                    title="Gearbox Reduction Ratio"
-                    value={result.gearbox_reduction_ratio}
-                    unit=""
+                    title="Gearbox Power"
+                    value={result.gearbox_kw}
+                    unit="kW"
                   />
                   <ResultCard
                     title="High Speed Coupling"
@@ -589,7 +737,7 @@ export default function ConveyorCalculator() {
                     unit="kW/rpm"
                   />
                   <ResultCard
-                    title="Pulley Shaft Diameter"
+                    title="DrivePulley Shaft Diameter"
                     value={result.pulley_shaft_diameter}
                     unit="mm"
                   />

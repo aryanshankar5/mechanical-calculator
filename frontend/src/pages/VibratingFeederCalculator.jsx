@@ -15,11 +15,26 @@ import {
 
 const API_URL = import.meta.env.VITE_API_URL;
 
+function SmallSpinner({ text = "Loading..." }) {
+  return (
+    <div className="flex items-center gap-2 mt-1 text-sm text-blue-600 font-medium">
+      <span className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></span>
+      <span>{text}</span>
+    </div>
+  );
+}
+
 export default function VibratingFeederCalculator() {
   const navigate = useNavigate();
   const [materials, setMaterials] = useState([]);
+  const [materialSearch, setMaterialSearch] = useState("");
+  const [showMaterialDropdown, setShowMaterialDropdown] = useState(false);
+  const [loadingFields, setLoadingFields] = useState({
+    bulkDensity: false,
+  });
   const [form, setForm] = useState({
     material_name: "",
+    bulk_density: "",
     required_capacity: 200,
     largest_lump_size: 150,
     large_size_material_percent: 40,
@@ -36,23 +51,75 @@ export default function VibratingFeederCalculator() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  const filteredMaterials = materials
+    .filter((material) =>
+      material.toLowerCase().includes(materialSearch.toLowerCase())
+    )
+    .sort((a, b) => {
+      const search = materialSearch.toLowerCase();
+
+      const aStarts = a.toLowerCase().startsWith(search);
+      const bStarts = b.toLowerCase().startsWith(search);
+
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+
+      return a.localeCompare(b);
+    });
+
   useEffect(() => {
     axios
       .get(`${API_URL}/vibrating-feeder-materials`)
-      .then((response) => {
+      .then(async (response) => {
         const list = response.data.materials || [];
         setMaterials(list);
+
         if (list.length > 0) {
+          const firstMaterial = list[0];
+
           setForm((prev) => ({
             ...prev,
-            material_name: list[0],
+            material_name: "",
+            bulk_density: "",
           }));
+
+          setMaterialSearch(firstMaterial);
+
+          // Fetch density automatically for first material
+          await fetchBulkDensity(firstMaterial);
         }
       })
       .catch((error) => {
         console.error("Failed to load feeder materials", error);
       });
   }, []);
+
+  const fetchBulkDensity = async (material) => {
+    if (!material) return;
+
+    try {
+      setLoadingFields((prev) => ({
+        ...prev,
+        bulkDensity: true,
+      }));
+
+      const response = await axios.get(
+        `${API_URL}/vibrating-feeder-material-density/${encodeURIComponent(material)}`
+      );
+
+      setForm((prev) => ({
+        ...prev,
+        bulk_density: Number(response.data.bulk_density),
+      }));
+    } catch (error) {
+      console.error("Bulk density fetch failed", error.response?.data || error);
+    } finally {
+      setLoadingFields((prev) => ({
+        ...prev,
+        bulkDensity: false,
+      }));
+    }
+  };
 
   const calculate = async () => {
     if (!form.material_name) {
@@ -116,28 +183,75 @@ export default function VibratingFeederCalculator() {
           <div className="lg:col-span-2">
             <FormSection>
               <Section title="Material & Capacity Data">
-                <div className="space-y-2">
+                <div className="space-y-2 relative">
                   <label className="block text-sm font-semibold text-slate-700 uppercase tracking-wide">
                     Material Name
                   </label>
-                  <select
-                    className="w-full border-2 border-slate-200 rounded-xl p-3 text-base font-medium focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all duration-200 bg-white cursor-pointer"
-                    value={form.material_name}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        material_name: e.target.value,
-                      })
-                    }
-                  >
-                    <option value="">Select Material</option>
-                    {materials.map((material, index) => (
-                      <option key={`${material}-${index}`} value={material}>
-                        {material}
-                      </option>
-                    ))}
-                  </select>
+
+                  <input
+                    type="text"
+                    value={materialSearch}
+                    placeholder="Search material..."
+                    onFocus={() => setShowMaterialDropdown(true)}
+                    onChange={(e) => {
+                      setMaterialSearch(e.target.value);
+                      setShowMaterialDropdown(true);
+
+                      setForm((prev) => ({
+                        ...prev,
+                        material_name: "",
+                      }));
+                    }}
+                    className="w-full border-2 border-slate-200 rounded-xl p-3 text-base font-medium focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all duration-200 bg-white"
+                  />
+
+                  {showMaterialDropdown && (
+                    <div className="absolute z-50 w-full max-h-60 overflow-y-auto bg-white border-2 border-slate-200 rounded-xl shadow-lg">
+                      {filteredMaterials.length > 0 ? (
+                        filteredMaterials.map((material, index) => (
+                          <div
+                            key={`${material}-${index}`}
+                            onMouseDown={() => {
+                              setMaterialSearch(material);
+                              setShowMaterialDropdown(false);
+
+                              setForm((prev) => ({
+                                ...prev,
+                                material_name: material,
+                              }));
+
+                              fetchBulkDensity(material);
+                            }}
+                            className="px-4 py-2 text-sm font-medium cursor-pointer hover:bg-blue-100"
+                          >
+                            {material}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="px-4 py-2 text-sm text-slate-500">
+                          No material found
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
+
+                <Input
+                  label="Bulk Density"
+                  value={form.bulk_density}
+                  unit="t/m³"
+                  step="0.1"
+                  onChange={(value) =>
+                    setForm({
+                      ...form,
+                      bulk_density: Number(value),
+                    })
+                  }
+                />
+
+                {loadingFields.bulkDensity && (
+                  <SmallSpinner text="Fetching bulk density..." />
+                )}
 
                 <Input
                   label="Required Capacity"
